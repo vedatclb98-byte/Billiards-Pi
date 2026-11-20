@@ -1,0 +1,19 @@
+# Render Blueprint: Render > New > Blueprint ile bu depoyu seçince servis otomatik kurulur.
+services:
+  - type: web
+    name: billiards-pi
+    runtime: node
+    plan: free
+    buildCommand: "true"
+    startCommand: node server.js
+    healthCheckPath: /
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      # Gizli değerleri Render panelinden kendin gir (Environment sekmesi)
+      - key: PI_NETWORK_API_KEY
+        sync: false
+      - key: PI_VALIDATION_KEY
+        sync: false
+      - key: PI_APP_URL
+        sync: false

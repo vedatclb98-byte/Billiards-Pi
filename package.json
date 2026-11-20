@@ -1,0 +1,12 @@
+{
+  "name": "pi-bilardo",
+  "version": "0.1.0",
+  "description": "Pi Network için 8 top bilardo oyunu (Pi Login + Pi Payments)",
+  "main": "server.js",
+  "private": true,
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "PORT=3000 node server.js"
+  }
+}
