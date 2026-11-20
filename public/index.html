@@ -836,7 +836,7 @@ function buy(it){
   const note=$('storeNote');
   if(!piAuth){ note.textContent='Satın almak için önce Pi ile giriş yap.'; return; }
   note.textContent='Ödeme başlatılıyor…';
-  window.Pi.createPayment({amount:it.price,memo:'Pi Bilardo: '+it.name,metadata:{itemId:it.id}},{
+  window.Pi.createPayment({amount:it.price,memo:'Billiards Pi: '+it.name,metadata:{itemId:it.id}},{
     onReadyForServerApproval:paymentId=>{
       api('/api/payments/approve',{paymentId,accessToken:piAuth.accessToken}).catch(e=>note.textContent='Onay hatası: '+e.message);
     },

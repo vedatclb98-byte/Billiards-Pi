@@ -88,25 +88,49 @@ function auth(sid) {
 }
 
 /* ---------- ödeme işlemleri ---------- */
-async function approvePayment(paymentId, accessToken) {
-  const me = await piMe(accessToken);
-  const pay = await piServer('GET', '/payments/' + encodeURIComponent(paymentId));
+const payPath = id => '/payments/' + encodeURIComponent(id);
+// Pi'den alınan ödemeyi sunucudaki ürün/fiyat bilgisine göre doğrular; ürün kimliğini döner.
+function checkPayment(pay, uid) {
   const itemId = pay.metadata && pay.metadata.itemId;
-  if (pay.user_uid !== me.uid) throw httpErr(403, 'Ödeme bu kullanıcıya ait değil');
-  if (!(itemId in ITEMS)) throw httpErr(400, 'Bilinmeyen ürün');
+  if (uid && pay.user_uid !== uid) throw httpErr(403, 'Ödeme bu kullanıcıya ait değil');
+  if (pay.direction && pay.direction !== 'user_to_app') throw httpErr(400, 'Yanlış ödeme yönü');
+  if (!Object.prototype.hasOwnProperty.call(ITEMS, itemId)) throw httpErr(400, 'Bilinmeyen ürün');
   if (Number(pay.amount) !== ITEMS[itemId]) throw httpErr(400, 'Tutar uyuşmuyor');
+  return itemId;
+}
+async function approvePayment(paymentId, accessToken) {
+  if (!paymentId) throw httpErr(400, 'paymentId eksik');
+  const me = await piMe(accessToken);
+  const pay = await piServer('GET', payPath(paymentId));
+  const itemId = checkPayment(pay, me.uid);
+  if (pay.status && pay.status.developer_approved) return { ok: true }; // tekrar gelen istek
   if (userItems(me.uid).includes(itemId)) throw httpErr(409, 'Bu ürün zaten sende');
-  await piServer('POST', '/payments/' + encodeURIComponent(paymentId) + '/approve');
-  db.payments[paymentId] = { uid: me.uid, itemId, amount: pay.amount, status: 'approved', at: Date.now() };
+  // Pi'ye onay göndermeden önce ödeme kimliğini kaydet
+  db.payments[paymentId] = { uid: me.uid, itemId, amount: pay.amount, status: 'approving', at: Date.now() };
+  save();
+  await piServer('POST', payPath(paymentId) + '/approve');
+  db.payments[paymentId].status = 'approved';
   save();
   return { ok: true };
 }
-async function completePayment(paymentId, txid) {
+// uid verilirse ödemenin o kullanıcıya ait olduğu da kontrol edilir
+async function completePayment(paymentId, txid, uid) {
+  if (!paymentId) throw httpErr(400, 'paymentId eksik');
   if (!txid) throw httpErr(400, 'txid eksik');
-  const pay = await piServer('POST', '/payments/' + encodeURIComponent(paymentId) + '/complete', { txid });
-  const itemId = pay.metadata && pay.metadata.itemId;
-  if (itemId in ITEMS) grant(pay.user_uid, itemId);
-  db.payments[paymentId] = { ...(db.payments[paymentId] || {}), uid: pay.user_uid, itemId, txid, status: 'completed', at: Date.now() };
+  const prev = db.payments[paymentId];
+  if (prev && prev.status === 'completed') {
+    if (uid && prev.uid !== uid) throw httpErr(403, 'Ödeme bu kullanıcıya ait değil');
+    return { ok: true, items: userItems(prev.uid) };
+  }
+  const pay = await piServer('GET', payPath(paymentId));
+  const itemId = checkPayment(pay, uid);
+  const chainTx = pay.transaction && pay.transaction.txid;
+  if (chainTx && chainTx !== txid) throw httpErr(400, 'txid uyuşmuyor');
+  db.payments[paymentId] = { ...(prev || {}), uid: pay.user_uid, itemId, amount: pay.amount, txid, status: 'completing', at: Date.now() };
+  save();
+  if (!(pay.status && pay.status.developer_completed)) await piServer('POST', payPath(paymentId) + '/complete', { txid });
+  grant(pay.user_uid, itemId); // grant() aynı ürünü iki kez vermez
+  db.payments[paymentId].status = 'completed';
   save();
   return { ok: true, items: userItems(pay.user_uid) };
 }
@@ -192,15 +216,20 @@ const routes = {
   },
 
   'POST /api/payments/approve': b => approvePayment(String(b.paymentId || ''), b.accessToken),
-  'POST /api/payments/complete': b => completePayment(String(b.paymentId || ''), b.txid),
-  // Yarım kalmış ödeme: blokzincire işlenmişse tamamla, değilse iptal et
+  'POST /api/payments/complete': async b => {
+    const me = await piMe(b.accessToken);
+    return completePayment(String(b.paymentId || ''), b.txid, me.uid);
+  },
+  // Yarım kalmış ödeme (Pi.authenticate sırasında gelir): durumu istemciden değil Pi'den okunur.
+  // Blokzincire işlenmişse tamamla, değilse iptal et.
   'POST /api/payments/incomplete': async b => {
-    const p = b.payment || {};
-    const id = p.identifier;
+    const id = String((b.payment && b.payment.identifier) || '');
     if (!id) throw httpErr(400, 'payment.identifier eksik');
-    const txid = p.transaction && p.transaction.txid;
+    const pay = await piServer('GET', payPath(id));
+    const txid = pay.transaction && pay.transaction.txid;
     if (txid) return completePayment(id, txid);
-    await piServer('POST', '/payments/' + encodeURIComponent(id) + '/cancel');
+    await piServer('POST', payPath(id) + '/cancel');
+    if (db.payments[id]) { db.payments[id].status = 'cancelled'; save(); }
     return { ok: true, cancelled: true };
   },
 
