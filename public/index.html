@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>Pi Bilardo</title>
+<title>Billiards Pi</title>
 <script src="https://sdk.minepi.com/pi-sdk.js"></script>
 <style>
 :root{--bg:#0d1117;--panel:#161b22;--ink:#e6edf3;--muted:#8b949e;--accent:#f0b429;--pi:#7b3fe4}
@@ -59,6 +59,9 @@ h2{margin:0 0 12px;font-size:22px}
 .stats{width:100%;border-collapse:collapse;font-size:14px;text-align:left}
 .stats td{padding:8px 4px;border-bottom:1px solid #21262d}
 .stats td:last-child{text-align:right;font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
+.stats tr.me td{color:var(--accent)}
+.stats td.rk{width:30px;color:var(--muted)}
+.tabs .btn{padding:9px;font-size:14px;margin:0 0 8px}
 </style>
 </head>
 <body>
@@ -80,7 +83,7 @@ h2{margin:0 0 12px;font-size:22px}
 
 <div class="overlay" id="menu">
   <div class="card">
-    <h1>🎱 Pi Bilardo</h1>
+    <h1>🎱 Billiards Pi</h1>
     <div class="sub">8 top bilardo • Pi Network</div>
     <div class="user" id="userLine"></div>
     <button class="btn primary hidden" id="btnResume">Devam Et</button>
@@ -88,8 +91,10 @@ h2{margin:0 0 12px;font-size:22px}
     <button class="btn primary" id="btnAI">Bilgisayara Karşı</button>
     <button class="btn" id="btnOnline">Arkadaşla Oyna (çevrimiçi)</button>
     <button class="btn" id="btnPvp">2 Oyuncu (aynı cihaz)</button>
+    <button class="btn" id="btnSolo">⏱ Zamana Karşı (tek kişi)</button>
     <button class="btn pi" id="btnLogin">π Pi ile Giriş Yap</button>
     <div class="row"><button class="btn" id="btnStore">Mağaza</button><button class="btn" id="btnStats">İstatistik</button></div>
+    <button class="btn" id="btnLb">🏆 Liderlik Tablosu</button>
     <button class="btn" id="btnRules">Kurallar</button>
     <div class="note" id="menuNote"></div>
   </div>
@@ -146,6 +151,16 @@ h2{margin:0 0 12px;font-size:22px}
   </div>
 </div>
 
+<div class="overlay hidden" id="lbBox">
+  <div class="card">
+    <h2>🏆 Liderlik Tablosu</h2>
+    <div class="row tabs"><button class="btn primary" id="lbTabPts">Puan</button><button class="btn" id="lbTabSolo">Zamana Karşı</button></div>
+    <table class="stats" id="lbTable"></table>
+    <div class="note" id="lbNote"></div>
+    <button class="btn" id="lbClose">Kapat</button>
+  </div>
+</div>
+
 <div class="overlay hidden" id="rulesBox">
   <div class="card">
     <h2>Kurallar</h2>
@@ -156,6 +171,7 @@ h2{margin:0 0 12px;font-size:22px}
       <li>Faul: beyaz topun cebe girmesi, hiçbir topa vurmamak ya da önce rakip gruba (veya 8'e) vurmak. Faulden sonra rakip beyaz topu istediği yere koyar.</li>
       <li>Grubunu bitirdikten sonra 8 topu sokan kazanır. 8 topu erken ya da faulle sokan kaybeder.</li>
       <li>Nişan: masaya dokun ve sürükle, ◀ ▶ ile ince ayar yap. Istakaya basılı tut: güç dolar ve geri iner, bırakınca vurursun. Bilgisayarda boşluk tuşu da aynı işi görür.</li>
+      <li><b>Zamana Karşı:</b> tek başına 15 topu istediğin sırayla sok. Süre ilk atışta başlar. Beyaz top cebe girerse +10 sn ceza ve beyazı istediğin yere koyarsın. En iyi süren liderlik tablosuna girer.</li>
       <li>Falso: sol alttaki küçük topa dokun. Üstten vurmak beyaz topu ileri götürür (takip), alttan vurmak geri çeker. Yandan vurmak banttan dönüşü değiştirir.</li>
     </ul>
     <button class="btn" id="rulesClose">Tamam</button>
@@ -180,13 +196,21 @@ const PI_CONFIG = {
   sandbox: /^(localhost|127\.0\.0\.1)$/.test(location.hostname),
   backend: '' // aynı sunucu; farklıysa 'https://api.ornek.com'
 };
+// Fiyatlar server.js içindeki ITEMS ile aynı olmalı (fiyatı sunucu kontrol eder)
 const ITEMS = [
-  {id:'gold_cue',  type:'cue',   name:'Altın Istaka', price:0.5, sw:'#d4a017'},
-  {id:'blue_table',type:'table', name:'Mavi Çuha',    price:0.3, sw:'#1f5fa8'},
-  {id:'red_table', type:'table', name:'Bordo Çuha',   price:0.3, sw:'#7d1a2a'}
+  {id:'gold_cue',    type:'cue',   name:'Altın Istaka',     price:0.5, sw:'#d4a017'},
+  {id:'carbon_cue',  type:'cue',   name:'Karbon Istaka',    price:0.4, sw:'linear-gradient(135deg,#d8d8d8,#2b2b2b)'},
+  {id:'pi_cue',      type:'cue',   name:'Pi Istaka',        price:0.8, sw:'linear-gradient(135deg,#efe3ff,#7b3fe4)'},
+  {id:'blue_table',  type:'table', name:'Mavi Çuha',        price:0.3, sw:'#1f5fa8'},
+  {id:'red_table',   type:'table', name:'Bordo Çuha',       price:0.3, sw:'#7d1a2a'},
+  {id:'purple_table',type:'table', name:'Pi Moru Çuha',     price:0.4, sw:'#5b2c9e'},
+  {id:'black_table', type:'table', name:'Gece Siyahı Çuha', price:0.4, sw:'#22272e'},
+  {id:'neon_balls',  type:'balls', name:'Neon Top Seti',    price:0.6, sw:'conic-gradient(#ffe600,#00c8ff,#ff2d55,#b14dff,#39ff14,#ffe600)'}
 ];
-const TABLES = {default:'#0f6b3a', blue_table:'#1f5fa8', red_table:'#7d1a2a'};
-const CUES = {default:['#efe0bd','#b07a3c','#3b200f'], gold_cue:['#fff3c4','#d4a017','#5a3b00']};
+const TYPE_NAME = {cue:'Istaka', table:'Çuha', balls:'Top seti'};
+const TABLES = {default:'#0f6b3a', blue_table:'#1f5fa8', red_table:'#7d1a2a', purple_table:'#5b2c9e', black_table:'#22272e'};
+const CUES = {default:['#efe0bd','#b07a3c','#3b200f'], gold_cue:['#fff3c4','#d4a017','#5a3b00'],
+  carbon_cue:['#e6e6e6','#2b2b2b','#0a0a0a'], pi_cue:['#efe3ff','#7b3fe4','#2d0f63']};
 const LEVELS = {
   kolay:{label:'Kolay', noise:0.045, pwErr:0.25, pickTop:3},
   orta: {label:'Orta',  noise:0.014, pwErr:0.10, pickTop:1},
@@ -201,7 +225,8 @@ const HEAD_X=TW*0.25, FOOT={x:TW*0.75,y:TH/2};
 const CM=30, SM=22;
 const POCKETS=[{x:-4,y:-4,r:25},{x:TW/2,y:-9,r:21},{x:TW+4,y:-4,r:25},{x:-4,y:TH+4,r:25},{x:TW/2,y:TH+9,r:21},{x:TW+4,y:TH+4,r:25}];
 const COLORS={1:'#f5c518',2:'#1f4fd8',3:'#d62828',4:'#6a2c91',5:'#f77f00',6:'#138a36',7:'#7a1f1f',8:'#111111'};
-const colorOf=n=>n===0?'#f8f8f2':COLORS[n>8?n-8:n];
+const BALLSETS={default:COLORS, neon_balls:{1:'#ffe600',2:'#00c8ff',3:'#ff2d55',4:'#b14dff',5:'#ff8a00',6:'#39ff14',7:'#ff4fa3',8:'#111111'}};
+const colorOf=n=>n===0?'#f8f8f2':(BALLSETS[equip.balls]||COLORS)[n>8?n-8:n];
 const typeOf=n=>n===0?'cue':n===8?'eight':(n<8?'solid':'stripe');
 const GROUP_NAME={solid:'Düz',stripe:'Parçalı'};
 const $=id=>document.getElementById(id);
@@ -210,8 +235,8 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 /* ================= Depolama ================= */
 const store={get(k,d){try{const v=localStorage.getItem(k);return v?JSON.parse(v):d;}catch(e){return d;}},set(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}},del(k){try{localStorage.removeItem(k);}catch(e){}}};
 let owned=new Set(store.get('pibilardo.owned',[]));
-let equip=store.get('pibilardo.equip',{cue:'default',table:'default'});
-const freshStats=()=>({ai:{kolay:{w:0,l:0},orta:{w:0,l:0},zor:{w:0,l:0}},online:{w:0,l:0},pvp:0,streak:0,best:0,shots:0,pots:0});
+let equip=Object.assign({cue:'default',table:'default',balls:'default'},store.get('pibilardo.equip',{}));
+const freshStats=()=>({ai:{kolay:{w:0,l:0},orta:{w:0,l:0},zor:{w:0,l:0}},online:{w:0,l:0},pvp:0,solo:{games:0,best:0},streak:0,best:0,shots:0,pots:0});
 let stats=Object.assign(freshStats(),store.get('pibilardo.stats',{}));
 
 /* ================= Oyun durumu ================= */
@@ -222,7 +247,7 @@ let drag=null, powering=false, aiAnim=null;
 
 function mk(n,x,y){return{n,x,y,vx:0,vy:0,active:true};}
 function rack(){
-  balls=[]; cue=mk(0,HEAD_X-60,TH/2); balls.push(cue);
+  balls=[]; sinking=[]; cue=mk(0,HEAD_X-60,TH/2); balls.push(cue);
   const order=[1,9,2,10,8,3,11,4,14,5,6,13,15,7,12]; let i=0;
   for(let r=0;r<5;r++)for(let c=0;c<=r;c++)
     balls.push(mk(order[i++],FOOT.x+r*(2*R*0.866+0.6),FOOT.y+(c-r/2)*(2*R+0.6)));
@@ -236,10 +261,37 @@ function newGame(mode,breaker,level){
   leaveRoom();
   S.mode=mode; if(level)S.level=level;
   const me=session?session.username:'Oyuncu 1';
+  if(mode==='solo'){
+    setupFresh(0,[me,'Süre']); S.solo={start:null,penalty:0,newBest:false};
+    hideAll(); updateHud(); renderSpin();
+    toast('15 topu olabildiğince hızlı sok! Süre ilk atışta başlar.');
+    return;
+  }
   setupFresh(breaker||0,[me,mode==='ai'?'Bilgisayar ('+LEVELS[S.level].label+')':'Oyuncu 2']);
   hideAll(); updateHud(); renderSpin();
   toast(S.players[S.cur].name+' açıyor. Beyaz topu çizginin soluna yerleştirebilirsin.');
   maybeAI();
+}
+/* ---- Zamana karşı (tek kişi) ---- */
+function soloElapsed(){ return S.solo&&S.solo.start!==null?(performance.now()-S.solo.start)/1000+S.solo.penalty:0; }
+function endSoloShot(){
+  const sh=S.shot;
+  stats.pots+=sh.potted.length;
+  S.isBreak=false; S.kitchen=false; S.shot=null;
+  if(sh.scratch){ S.solo.penalty+=10; giveBallInHand(); toast('Beyaz top cebe girdi: +10 sn. Beyazı istediğin yere koy.'); }
+  else if(sh.first===null){ toast('Hiçbir topa vurulmadı'); }
+  S.phase='aim';
+  if(!balls.some(b=>b.active&&b.n!==0))return finishSolo();
+  store.set('pibilardo.stats',stats); updateHud();
+}
+function finishSolo(){
+  const t=Math.round(soloElapsed()*10)/10;
+  S.phase='over'; S.winner=0; S.shot=null;
+  S.solo.newBest=!stats.solo.best||t<stats.solo.best;
+  if(S.solo.newBest)stats.solo.best=t;
+  stats.solo.games++; saveStats();
+  S.reason='Süren: '+fmtTime(t)+(S.solo.penalty?' ('+S.solo.penalty+' sn ceza dahil)':'')+' • En iyi: '+fmtTime(stats.solo.best);
+  updateHud(); setTimeout(showOver,700);
 }
 function remaining(g){return g?balls.filter(b=>b.active&&typeOf(b.n)===g).length:-1;}
 function overlaps(x,y,ex){return balls.some(b=>b.active&&b!==ex&&Math.hypot(b.x-x,b.y-y)<2*R+0.5);}
@@ -251,7 +303,7 @@ function freeSpot(x,y){
   }
   return{x,y};
 }
-function isHumanShooter(){ return S.mode==='pvp'||(S.mode==='ai'&&S.cur===0)||(S.mode==='online'&&room&&S.cur===room.me); }
+function isHumanShooter(){ return S.mode==='pvp'||S.mode==='solo'||(S.mode==='ai'&&S.cur===0)||(S.mode==='online'&&room&&S.cur===room.me); }
 
 /* ================= Fizik ================= */
 function physicsFrame(){
@@ -262,9 +314,10 @@ function physicsFrame(){
   }
   for(const b of balls){ if(!b.active)continue;
     const sp=Math.hypot(b.vx,b.vy);
-    if(sp>0){ const ns=sp*FRICTION-LINDEC; if(ns<STOP){b.vx=b.vy=0;} else {b.vx*=ns/sp; b.vy*=ns/sp; moving=true;} }
+    if(sp>0){ b.roll=(b.roll||0)+sp/R; b.dir=Math.atan2(b.vy,b.vx);
+      const ns=sp*FRICTION-LINDEC; if(ns<STOP){b.vx=b.vy=0;} else {b.vx*=ns/sp; b.vy*=ns/sp; moving=true;} }
   }
-  return moving;
+  return moving || sinking.length>0;
 }
 // Yan falso: bant dönüşünde beyaz top, vuruş yönüne göre falso tarafına kayar
 function english(b,axis,vnOld){
@@ -282,15 +335,21 @@ function walls(b){
 }
 function pocketCheck(b){
   if(!b.active)return;
-  for(const p of POCKETS){ if((b.x-p.x)**2+(b.y-p.y)**2<p.r*p.r){pocket(b);return;} }
+  for(const p of POCKETS){ if((b.x-p.x)**2+(b.y-p.y)**2<p.r*p.r){pocket(b,p);return;} }
   // Merkezi bant çizgisini geçen top (sadece cep ağızlarında mümkün) cebe düşmüş sayılır
   if(b.x<0||b.x>TW||b.y<0||b.y>TH)pocket(b);
 }
-function pocket(b){
+// Cebe düşen toplar kısa bir animasyonla cebin içine kayar
+let sinking=[];
+function pocket(b,p){
+  if(!p)p=POCKETS.reduce((a,c)=>Math.hypot(c.x-b.x,c.y-b.y)<Math.hypot(a.x-b.x,a.y-b.y)?c:a);
+  sinking.push({n:b.n,x:b.x,y:b.y,px:p.x,py:p.y,roll:b.roll,dir:b.dir,t:0});
   b.active=false; b.vx=b.vy=0;
   if(S.shot){ if(b.n===0)S.shot.scratch=true; else S.shot.potted.push(b.n); }
   sfx('pot');
 }
+const SINK_FRAMES=14;
+function sinkStep(){ for(const s of sinking)s.t++; sinking=sinking.filter(s=>s.t<SINK_FRAMES); }
 function collide(){
   const n=balls.length;
   for(let i=0;i<n;i++){ const a=balls[i]; if(!a.active)continue;
@@ -326,6 +385,7 @@ function launch(power,spin){
   cue.vx=Math.cos(S.aim)*v; cue.vy=Math.sin(S.aim)*v;
   cue.spin={side:spin?spin.x:0,follow:spin?spin.y:0,used:false};
   S.ballInHand=false; S.phase='moving'; setPow(0); sfx('cue',v);
+  if(!S.replay){ try{ navigator.vibrate&&navigator.vibrate(Math.round(10+power*25)); }catch(e){} }
 }
 function shoot(power){
   if(S.phase!=='aim'||!cue.active)return;
@@ -338,10 +398,12 @@ function shoot(power){
   const p=S.players[S.cur];
   S.shot={first:null,potted:[],scratch:false,clearedBefore:p.group!==null&&remaining(p.group)===0,human:isHumanShooter()};
   if(S.shot.human)stats.shots++;
+  if(S.mode==='solo'&&S.solo.start===null)S.solo.start=performance.now();
   launch(power,spin);
   S.spin={x:0,y:0}; renderSpin();
 }
 function endShot(){
+  if(S.mode==='solo')return endSoloShot();
   const sh=S.shot, p=S.players[S.cur], o=S.players[1-S.cur];
   let foul=null;
   if(sh.scratch) foul='beyaz top cebe girdi';
@@ -387,9 +449,11 @@ function gameOver(w,reason){
 function showOver(){
   if(S.phase!=='over')return;
   const w=S.winner, mine=S.mode==='online'?w===room.me:S.mode==='ai'?w===0:null;
-  $('overTitle').textContent=mine===true?'🏆 Kazandın!':mine===false?'😔 '+S.players[w].name+' kazandı':'🏆 '+S.players[w].name+' kazandı!';
+  $('overTitle').textContent=S.mode==='solo'?(S.solo.newBest?'🏆 Yeni rekor!':'⏱ Masa temizlendi!'):
+    mine===true?'🏆 Kazandın!':mine===false?'😔 '+S.players[w].name+' kazandı':'🏆 '+S.players[w].name+' kazandı!';
   $('overReason').textContent=S.reason;
   $('btnAgain').textContent=S.mode==='online'?'Rövanş':'Tekrar Oyna';
+  sfx(mine===false?'lose':'win');
   show('over');
 }
 
@@ -403,7 +467,7 @@ function recordResult(){
   }
   saveStats();
 }
-function totalGames(s){ return s.pvp+s.online.w+s.online.l+Object.values(s.ai).reduce((a,b)=>a+b.w+b.l,0); }
+function totalGames(s){ return s.pvp+(s.solo?s.solo.games:0)+s.online.w+s.online.l+Object.values(s.ai).reduce((a,b)=>a+b.w+b.l,0); }
 function saveStats(){ store.set('pibilardo.stats',stats); if(session)api('/api/stats',{sid:session.sid,stats}).catch(()=>{}); }
 function mergeStats(remote){ if(remote&&totalGames(Object.assign(freshStats(),remote))>totalGames(stats)){ stats=Object.assign(freshStats(),remote); store.set('pibilardo.stats',stats); } }
 function renderStats(){
@@ -414,6 +478,7 @@ function renderStats(){
     ['Bilgisayar · Zor',wl(stats.ai.zor)+rate(stats.ai.zor)],
     ['Çevrimiçi',wl(stats.online)+rate(stats.online)],
     ['Aynı cihazda oyun',stats.pvp],
+    ['Zamana karşı en iyi',stats.solo.best?fmtTime(stats.solo.best)+' ('+stats.solo.games+' oyun)':'—'],
     ['Galibiyet serisi',stats.streak+' (en iyi '+stats.best+')'],
     ['Atış',stats.shots],
     ['Sokulan top',stats.pots+(stats.shots?' (atış başına '+(stats.pots/stats.shots).toFixed(2)+')':'')]
@@ -524,17 +589,36 @@ function drawTable(){
   if(S.kitchen&&S.ballInHand&&S.phase==='aim'){ ctx.fillStyle='rgba(255,255,255,.04)'; ctx.fillRect(0,0,HEAD_X,TH); }
   for(const p of POCKETS){ ctx.fillStyle='#050505'; circ(p.x,p.y,p.r-1); ctx.fill(); ctx.strokeStyle='#2a1a0e'; ctx.lineWidth=3; ctx.stroke(); }
 }
-function drawBall(b){
-  ctx.save(); ctx.translate(b.x,b.y);
+function drawBall(b,scale){
+  ctx.save(); ctx.translate(b.x,b.y); if(scale)ctx.scale(scale,scale);
   ctx.fillStyle='rgba(0,0,0,.35)'; circ(2.5,3,R); ctx.fill();
   circ(0,0,R); ctx.save(); ctx.clip();
-  if(b.n>8){ ctx.fillStyle='#f8f8f2'; ctx.fillRect(-R,-R,2*R,2*R); ctx.fillStyle=colorOf(b.n); ctx.fillRect(-R,-R*0.55,2*R,R*1.1); }
-  else { ctx.fillStyle=colorOf(b.n); ctx.fillRect(-R,-R,2*R,2*R); }
-  if(b.n>0){ ctx.fillStyle='#fff'; circ(0,0,R*0.5); ctx.fill(); ctx.fillStyle='#111'; ctx.font='bold 8px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(b.n,0,0.5); }
+  // Yuvarlanma: top hareket yönüne döndürülür, numara/şerit topun dönüşüyle kayar
+  const roll=b.roll||0, sr=Math.sin(roll), cr=Math.cos(roll);
+  ctx.save(); ctx.rotate(b.dir||0);
+  if(b.n>8){
+    ctx.fillStyle='#f8f8f2'; ctx.fillRect(-R,-R,2*R,2*R);
+    ctx.fillStyle=colorOf(b.n); ctx.fillRect(-R,-R*0.55,2*R,R*1.1);
+  } else { ctx.fillStyle=colorOf(b.n); ctx.fillRect(-R,-R,2*R,2*R); }
+  if(b.n>0&&cr>-0.2){
+    const ox=sr*R*0.7, sx=Math.max(0.15,cr);
+    ctx.translate(ox,0); ctx.scale(sx,1);
+    ctx.fillStyle='#fff'; circ(0,0,R*0.5); ctx.fill();
+    ctx.rotate(-(b.dir||0)); ctx.fillStyle='#111'; ctx.font='bold 8px sans-serif'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.fillText(b.n,0,0.5);
+  }
+  ctx.restore();
   const g=ctx.createRadialGradient(-R*0.35,-R*0.4,1,0,0,R*1.05);
   g.addColorStop(0,'rgba(255,255,255,.75)'); g.addColorStop(0.25,'rgba(255,255,255,.08)'); g.addColorStop(1,'rgba(0,0,0,.35)');
   ctx.fillStyle=g; ctx.fillRect(-R,-R,2*R,2*R);
   ctx.restore(); ctx.restore();
+}
+function drawSinking(){
+  for(const s of sinking){
+    const f=s.t/SINK_FRAMES, e=f*f;
+    ctx.globalAlpha=1-f*0.8;
+    drawBall({n:s.n,x:s.x+(s.px-s.x)*e,y:s.y+(s.py-s.y)*e,roll:s.roll,dir:s.dir},1-f*0.55);
+    ctx.globalAlpha=1;
+  }
 }
 function rayCast(ox,oy,dx,dy){
   let best=Infinity, hit=null;
@@ -550,7 +634,7 @@ function drawAim(){
   const dx=Math.cos(S.aim), dy=Math.sin(S.aim), r=rayCast(cue.x,cue.y,dx,dy);
   const ex=cue.x+dx*r.t, ey=cue.y+dy*r.t, p=S.players[S.cur];
   let bad=false;
-  if(r.hit&&!S.isBreak){ const want=p.group?(remaining(p.group)===0?'eight':p.group):null;
+  if(r.hit&&!S.isBreak&&S.mode!=='solo'){ const want=p.group?(remaining(p.group)===0?'eight':p.group):null;
     bad=want?typeOf(r.hit.n)!==want:r.hit.n===8; }
   ctx.setLineDash([6,6]); ctx.strokeStyle='rgba(255,255,255,.55)'; ctx.lineWidth=1.5; line(cue.x,cue.y,ex,ey); ctx.setLineDash([]);
   ctx.strokeStyle=bad?'rgba(255,90,90,.9)':'rgba(255,255,255,.8)'; circ(ex,ey,R); ctx.stroke();
@@ -589,6 +673,7 @@ function draw(){
   ctx.setTransform(1,0,0,1,0,0); ctx.clearRect(0,0,canvas.width,canvas.height);
   ctx.setTransform(new DOMMatrix([dpr,0,0,dpr,0,0]).multiply(view));
   drawTable();
+  drawSinking();
   for(const b of balls)if(b.active)drawBall(b);
   if(S.phase==='aim'&&cue&&cue.active){
     if(S.ballInHand&&canAct()){ ctx.setLineDash([4,4]); ctx.strokeStyle='rgba(240,180,41,.9)'; ctx.lineWidth=2; circ(cue.x,cue.y,R+6); ctx.stroke(); ctx.setLineDash([]); }
@@ -598,6 +683,13 @@ function draw(){
 
 /* ================= Arayüz ================= */
 function updateHud(){
+  if(S.mode==='solo'){
+    const left=balls.filter(b=>b.active&&b.n!==0);
+    $('p0').classList.add('active'); $('p1').classList.remove('active');
+    $('p0').querySelector('.nm').textContent=S.players[0].name;
+    $('p0').querySelector('.gr').innerHTML='Kalan '+left.length+' '+left.slice(0,15).map(b=>'<span class="dot" style="background:'+(b.n>8?'linear-gradient(#f8f8f2 25%,'+colorOf(b.n)+' 25% 75%,#f8f8f2 75%)':colorOf(b.n))+'"></span>').join('');
+    updateSoloTimer(); setPow(S.power); return;
+  }
   S.players.forEach((p,i)=>{
     const el=$('p'+i), active=i===S.cur&&S.phase!=='over'; el.classList.toggle('active',active);
     let nm=(active?'▶ ':'')+p.name;
@@ -612,6 +704,12 @@ function updateHud(){
     gr.innerHTML=left.length?GROUP_NAME[p.group]+' '+left.map(b=>'<span class="dot" style="background:'+(b.n>8?'linear-gradient(#f8f8f2 25%,'+colorOf(b.n)+' 25% 75%,#f8f8f2 75%)':colorOf(b.n))+'"></span>').join(''):'8 topu sok! <span class="dot" style="background:#111"></span>';
   });
   setPow(S.power);
+}
+function updateSoloTimer(){
+  if(S.mode!=='solo'||!S.solo)return;
+  const t=S.phase==='over'?null:soloElapsed();
+  $('p1').querySelector('.nm').textContent='⏱ '+fmtTime(t===null?(stats.solo.best||0):t);
+  $('p1').querySelector('.gr').textContent=(S.solo.penalty?'Ceza +'+S.solo.penalty+' sn · ':'')+'En iyi: '+(stats.solo.best?fmtTime(stats.solo.best):'—');
 }
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let toastT=0;
@@ -628,9 +726,30 @@ function hintText(){
   return 'Istakaya basılı tut, bırakınca vur';
 }
 function setPow(v){ S.power=v; $('hint').textContent=hintText(); }
-const overlays=['menu','store','rulesBox','over','levelBox','roomBox','spinBox','statsBox'];
+const overlays=['menu','store','rulesBox','over','levelBox','roomBox','spinBox','statsBox','lbBox'];
 function hideAll(){ overlays.forEach(o=>$(o).classList.add('hidden')); }
-function show(id){ hideAll(); $(id).classList.remove('hidden'); if(id==='menu')renderMenu(); if(id==='store')renderStore(); if(id==='statsBox')renderStats(); }
+function show(id){ hideAll(); $(id).classList.remove('hidden'); if(id==='menu')renderMenu(); if(id==='store')renderStore(); if(id==='statsBox')renderStats(); if(id==='lbBox')loadLeaderboard(); }
+
+/* ---- liderlik tablosu ---- */
+let lbData=null, lbTab='pts';
+const fmtTime=s=>{ const m=Math.floor(s/60), r=(s-m*60).toFixed(1); return m?m+':'+(r<10?'0':'')+r:r+' sn'; };
+async function loadLeaderboard(){
+  $('lbNote').textContent='Yükleniyor…'; renderLeaderboard();
+  try{ const r=await fetch(PI_CONFIG.backend+'/api/leaderboard'); if(!r.ok)throw new Error(); lbData=await r.json(); $('lbNote').textContent=''; }
+  catch(e){ $('lbNote').textContent='Liderlik tablosuna ulaşılamadı.'; }
+  renderLeaderboard();
+}
+function renderLeaderboard(){
+  $('lbTabPts').classList.toggle('primary',lbTab==='pts'); $('lbTabSolo').classList.toggle('primary',lbTab==='solo');
+  const me=session&&!session.guest?session.username:null, rows=lbData?(lbTab==='pts'?lbData.points:lbData.solo):[];
+  $('lbTable').innerHTML=rows.map((r,i)=>'<tr class="'+(r.name===me?'me':'')+'"><td class="rk">'+(i<3?['🥇','🥈','🥉'][i]:i+1)+'</td><td>'+esc(r.name)+'</td><td>'+
+    (lbTab==='pts'?r.score+' puan':fmtTime(r.time))+'</td></tr>').join('');
+  if(lbData&&!rows.length)$('lbNote').textContent=lbTab==='pts'?'Henüz kimse yok. İlk galibiyeti sen al!':'Henüz süre yok. Zamana karşı modunu dene!';
+  else if(lbData)$('lbNote').textContent=lbTab==='pts'?'Galibiyet puanı: Kolay 1 · Orta 2 · Zor 3 · Çevrimiçi 4':'15 topu en hızlı sokanlar (faul +10 sn)';
+  if(lbData&&!me)$('lbNote').textContent+=' • Listeye girmek için Pi ile giriş yap.';
+}
+$('lbTabPts').onclick=()=>{ lbTab='pts'; renderLeaderboard(); };
+$('lbTabSolo').onclick=()=>{ lbTab='solo'; renderLeaderboard(); };
 
 function canAct(){
   if(S.phase!=='aim'||isAITurn()||aiAnim||S.replay)return false;
@@ -724,17 +843,20 @@ $('btnAI').onclick=()=>show('levelBox');
 document.querySelectorAll('[data-level]').forEach(b=>b.onclick=()=>newGame('ai',0,b.dataset.level));
 $('levelClose').onclick=()=>show('menu');
 $('btnPvp').onclick=()=>newGame('pvp',0);
+$('btnSolo').onclick=()=>newGame('solo',0);
 $('btnOnline').onclick=createRoom;
 $('btnJoin').onclick=()=>joinRoom(pendingRoom);
 $('btnLogin').onclick=piLogin;
 $('btnStore').onclick=()=>show('store');
 $('btnStats').onclick=()=>show('statsBox');
 $('statsClose').onclick=()=>show('menu');
+$('btnLb').onclick=()=>show('lbBox');
+$('lbClose').onclick=()=>show('menu');
 $('btnRules').onclick=()=>show('rulesBox');
 $('rulesClose').onclick=()=>show('menu');
 $('storeClose').onclick=()=>show('menu');
 $('roomClose').onclick=()=>show('menu');
-$('btnAgain').onclick=()=>{ if(S.mode==='online')rematch(); else newGame(S.mode,1-S.breaker); };
+$('btnAgain').onclick=()=>{ if(S.mode==='online')rematch(); else newGame(S.mode,S.mode==='solo'?0:1-S.breaker); };
 $('btnToMenu').onclick=()=>show('menu');
 $('btnCopy').onclick=async()=>{
   const inp=$('roomLink');
@@ -742,7 +864,7 @@ $('btnCopy').onclick=async()=>{
   catch(e){ inp.select(); $('roomNote').textContent='Linki seçip kopyala. Rakip bekleniyor…'; }
 };
 $('btnShare').onclick=async()=>{
-  try{ await navigator.share({title:'Pi Bilardo',text:'Benimle bilardo oyna! 🎱',url:$('roomLink').value}); }
+  try{ await navigator.share({title:'Billiards Pi',text:'Benimle bilardo oyna! 🎱',url:$('roomLink').value}); }
   catch(e){ $('btnCopy').onclick(); }
 };
 
@@ -755,34 +877,70 @@ function renderMenu(){
   if(showJoin)$('btnJoin').textContent=(pendingFromLink?'Odaya Katıl':'Çevrimiçi oyuna dön')+' ('+pendingRoom+')';
 }
 function renderStore(){
-  $('storeList').innerHTML=ITEMS.map(it=>{
+  const html=ITEMS.map(it=>{
     const has=owned.has(it.id), on=equip[it.type]===it.id;
     const label=on?'Kullanılıyor':has?'Kullan':it.price+' π';
-    return '<div class="item"><span class="sw" style="background:'+it.sw+'"></span><div class="t">'+it.name+'<small>'+(it.type==='cue'?'Istaka':'Çuha')+'</small></div><button data-id="'+it.id+'" class="'+(on?'on':has?'own':'')+'">'+label+'</button></div>';
-  }).join('')+'<div class="item"><span class="sw" style="background:'+TABLES.default+'"></span><div class="t">Klasik<small>Varsayılan görünüm</small></div><button data-id="default" class="'+(equip.cue==='default'&&equip.table==='default'?'on':'own')+'">'+(equip.cue==='default'&&equip.table==='default'?'Kullanılıyor':'Kullan')+'</button></div>';
+    return '<div class="item"><span class="sw" style="background:'+it.sw+'"></span><div class="t">'+it.name+'<small>'+TYPE_NAME[it.type]+'</small></div><button data-id="'+it.id+'" class="'+(on?'on':has?'own':'')+'">'+label+'</button></div>';
+  }).join('');
+  const classic=equip.cue==='default'&&equip.table==='default'&&equip.balls==='default';
+  $('storeList').innerHTML=html+'<div class="item"><span class="sw" style="background:'+TABLES.default+'"></span><div class="t">Klasik<small>Varsayılan görünüm</small></div><button data-id="default" class="'+(classic?'on':'own')+'">'+(classic?'Kullanılıyor':'Kullan')+'</button></div>';
   $('storeList').querySelectorAll('button').forEach(b=>b.onclick=()=>storeClick(b.dataset.id));
 }
 function storeClick(id){
-  if(id==='default'){ equip={cue:'default',table:'default'}; store.set('pibilardo.equip',equip); return renderStore(); }
+  if(id==='default'){ equip={cue:'default',table:'default',balls:'default'}; store.set('pibilardo.equip',equip); updateHud(); return renderStore(); }
   const it=ITEMS.find(i=>i.id===id);
-  if(owned.has(id)){ equip[it.type]=equip[it.type]===id?'default':id; store.set('pibilardo.equip',equip); return renderStore(); }
+  if(owned.has(id)){ equip[it.type]=equip[it.type]===id?'default':id; store.set('pibilardo.equip',equip); updateHud(); return renderStore(); }
   buy(it);
 }
 
 /* ================= Ses ================= */
-let actx=null, lastHit=0;
+// Sesler sentezlenir (dosya yok): kısa gürültü patlaması + filtre ile top, bant, ıstaka ve cep sesleri
+let actx=null, noiseBuf=null, lastHit=0;
+function audio(){
+  if(!actx){
+    actx=new (window.AudioContext||window.webkitAudioContext)();
+    noiseBuf=actx.createBuffer(1,actx.sampleRate*0.5,actx.sampleRate);
+    const d=noiseBuf.getChannelData(0); for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;
+  }
+  if(actx.state==='suspended')actx.resume();
+  return actx;
+}
+function noise(now,{freq,q,type='bandpass',vol,dur,delay=0}){
+  const a=actx, src=a.createBufferSource(), f=a.createBiquadFilter(), g=a.createGain(), t=now+delay;
+  src.buffer=noiseBuf; f.type=type; f.frequency.value=freq; f.Q.value=q;
+  g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.0008,t+dur);
+  src.connect(f).connect(g).connect(a.destination); src.start(t,Math.random()*0.3); src.stop(t+dur+0.02);
+}
+function tone(now,{f0,f1,vol,dur,type='sine',delay=0}){
+  const a=actx, o=a.createOscillator(), g=a.createGain(), t=now+delay;
+  o.type=type; o.frequency.setValueAtTime(f0,t); if(f1)o.frequency.exponentialRampToValueAtTime(f1,t+dur);
+  g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.0008,t+dur);
+  o.connect(g).connect(a.destination); o.start(t); o.stop(t+dur+0.02);
+}
 function sfx(type,v){
   if(S.mute)return;
   try{
-    if(!actx)actx=new (window.AudioContext||window.webkitAudioContext)();
-    const now=actx.currentTime; if((type==='hit'||type==='rail')&&now-lastHit<0.03)return; lastHit=now;
-    const o=actx.createOscillator(), g=actx.createGain();
-    const vol=type==='pot'?0.25:Math.min(0.4,(v||5)/(type==='cue'?60:40));
-    o.type=type==='pot'?'sine':'triangle';
-    o.frequency.value=type==='hit'?1900:type==='rail'?300:type==='cue'?700:240;
-    if(type==='pot')o.frequency.exponentialRampToValueAtTime(70,now+0.25);
-    g.gain.setValueAtTime(vol,now); g.gain.exponentialRampToValueAtTime(0.001,now+(type==='pot'?0.3:0.07));
-    o.connect(g).connect(actx.destination); o.start(now); o.stop(now+0.35);
+    audio(); const now=actx.currentTime;
+    if((type==='hit'||type==='rail')&&now-lastHit<0.025)return;
+    if(type==='hit'||type==='rail')lastHit=now;
+    const k=Math.min(1,(v||5)/22);
+    if(type==='hit'){ // iki topun çarpışması: keskin, tiz tık
+      noise(now,{freq:3200,q:1.4,vol:0.12+0.5*k,dur:0.045});
+      tone(now,{f0:2600+600*k,vol:0.05+0.12*k,dur:0.03,type:'triangle'});
+    } else if(type==='rail'){ // banda çarpma: boğuk tok ses
+      noise(now,{freq:420,q:0.9,type:'lowpass',vol:0.15+0.45*k,dur:0.09});
+    } else if(type==='cue'){ // ıstaka: kısa tahta tık
+      noise(now,{freq:1500,q:2,vol:0.2+0.35*Math.min(1,(v||10)/MAXV),dur:0.035});
+      tone(now,{f0:900,f1:500,vol:0.08,dur:0.05,type:'triangle'});
+    } else if(type==='pot'){ // cep: düşüş + tahta cep içinde tıkırtı
+      tone(now,{f0:180,f1:60,vol:0.3,dur:0.22});
+      noise(now,{freq:900,q:1.5,vol:0.18,dur:0.06,delay:0.05});
+      noise(now,{freq:700,q:1.5,vol:0.1,dur:0.05,delay:0.14});
+    } else if(type==='win'){
+      [523,659,784,1047].forEach((f,i)=>tone(now,{f0:f,vol:0.12,dur:0.25,type:'triangle',delay:i*0.11}));
+    } else if(type==='lose'){
+      [392,330,262].forEach((f,i)=>tone(now,{f0:f,vol:0.1,dur:0.3,type:'triangle',delay:i*0.15}));
+    }
   }catch(e){}
 }
 
@@ -863,7 +1021,7 @@ function serialize(){
 }
 function playerName(i){ return room&&room.players[i]?room.players[i].name:'Rakip bekleniyor…'; }
 function applyState(st){
-  S.replay=false; aiAnim=null; powering=false; drag=null; S.shot=null;
+  S.replay=false; aiAnim=null; powering=false; drag=null; S.shot=null; sinking=[];
   balls=st.balls.map(([n,x,y,a])=>({n,x,y,vx:0,vy:0,active:!!a})); cue=balls.find(b=>b.n===0);
   S.cur=st.cur; S.isBreak=st.isBreak; S.ballInHand=st.ballInHand; S.kitchen=st.kitchen; S.breaker=st.breaker||0;
   S.players=[0,1].map(i=>({name:playerName(i),group:st.groups[i]}));
@@ -974,13 +1132,14 @@ async function rematch(){
 }
 
 /* ================= Döngü ================= */
-let last=0, acc=0;
+let last=0, acc=0, timerTick=0;
 function loop(t){
   requestAnimationFrame(loop);
   if(!last)last=t; acc+=Math.min(100,t-last); last=t;
   while(acc>=16.667){ acc-=16.667;
     if(aiAnim)aiAnim.step();
-    chargeStep();
+    chargeStep(); sinkStep();
+    if(S.mode==='solo'&&S.solo&&S.solo.start!==null&&S.phase!=='over'&&++timerTick%6===0)updateSoloTimer();
     if(S.phase==='moving'&&!physicsFrame()){
       if(S.replay){ S.replay=false; S.phase='wait'; setPow(0); } else endShot();
     }

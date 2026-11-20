@@ -25,7 +25,11 @@ const DB_FILE = process.env.DB_FILE || path.join(__dirname, 'data.json');
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
 // Satılan ürünler: fiyat sunucuda tanımlı, istemciye güvenilmez
-const ITEMS = { gold_cue: 0.5, blue_table: 0.3, red_table: 0.3 };
+const ITEMS = {
+  gold_cue: 0.5, carbon_cue: 0.4, pi_cue: 0.8,
+  blue_table: 0.3, red_table: 0.3, purple_table: 0.4, black_table: 0.4,
+  neon_balls: 0.6,
+};
 const ROOM_TTL = 7 * 24 * 3600 * 1000;
 
 /* ---------- basit JSON veritabanı ---------- */
@@ -208,6 +212,24 @@ const routes = {
     const uid = 'guest_' + crypto.randomBytes(6).toString('hex');
     const name = String(b.name || 'Misafir').slice(0, 20) + '-' + uid.slice(-3);
     return { sid: newSession(uid, name, true), uid, username: name, items: [], stats: null };
+  },
+  // Liderlik tablosu: puan = galibiyet (Kolay 1, Orta 2, Zor 3, Çevrimiçi 4) ve zamana karşı en iyi süreler
+  'GET /api/leaderboard': async () => {
+    const n = v => (Number.isFinite(+v) && +v >= 0 ? Math.floor(+v) : 0);
+    const rows = [];
+    for (const [uid, u] of Object.entries(db.users)) {
+      if (uid.startsWith('guest_') || !u.username || !u.stats) continue;
+      const st = u.stats, ai = st.ai || {};
+      const score = n(ai.kolay && ai.kolay.w) + 2 * n(ai.orta && ai.orta.w) + 3 * n(ai.zor && ai.zor.w) + 4 * n(st.online && st.online.w);
+      const soloBest = st.solo && Number.isFinite(+st.solo.best) && +st.solo.best > 0 ? +st.solo.best : null;
+      rows.push({ name: u.username, score, best: n(st.best), soloBest });
+    }
+    return {
+      points: rows.filter(r => r.score > 0).sort((a, b) => b.score - a.score || b.best - a.best).slice(0, 20)
+        .map(r => ({ name: r.name, score: r.score, best: r.best })),
+      solo: rows.filter(r => r.soloBest).sort((a, b) => a.soloBest - b.soloBest).slice(0, 10)
+        .map(r => ({ name: r.name, time: r.soloBest })),
+    };
   },
   'POST /api/stats': async b => {
     const s = auth(b.sid);
