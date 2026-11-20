@@ -3,5 +3,7 @@
   "name": "Billiards Pi",
   "host_network": "testnet",
   "slug": "billiards-pi-gxrj",
-  "development_url": "http://localhost:3000"
+  "development_url": "http://localhost:3000",
+  "frontend_url": "https://billiards-pi.onrender.com",
+  "pi_url": "https://billiardspigxrj4407.pinet.com"
 }
