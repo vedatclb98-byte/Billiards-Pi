@@ -62,6 +62,13 @@ h2{margin:0 0 12px;font-size:22px}
 .stats tr.me td{color:var(--accent)}
 .stats td.rk{width:30px;color:var(--muted)}
 .tabs .btn{padding:9px;font-size:14px;margin:0 0 8px}
+#menu h1{margin-bottom:10px}
+.btn.big{padding:17px;font-size:19px;margin:12px 0}
+.btn.mode{text-align:left;padding-left:16px}
+.icons{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px}
+.icons button{background:transparent;border:0;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;padding:6px 0;border-radius:10px;display:flex;flex-direction:column;align-items:center;gap:4px}
+.icons button span{font-size:22px;width:48px;height:48px;border-radius:14px;background:#21262d;display:flex;align-items:center;justify-content:center}
+.icons button:active span{background:#30363d}
 </style>
 </head>
 <body>
@@ -84,19 +91,30 @@ h2{margin:0 0 12px;font-size:22px}
 <div class="overlay" id="menu">
   <div class="card">
     <h1>🎱 Billiards Pi</h1>
-    <div class="sub">8 top bilardo • Pi Network</div>
     <div class="user" id="userLine"></div>
     <button class="btn primary hidden" id="btnResume">Devam Et</button>
     <button class="btn primary hidden" id="btnJoin">Odaya Katıl</button>
-    <button class="btn primary" id="btnAI">Bilgisayara Karşı</button>
-    <button class="btn" id="btnOnline">Arkadaşla Oyna (çevrimiçi)</button>
-    <button class="btn" id="btnPvp">2 Oyuncu (aynı cihaz)</button>
-    <button class="btn" id="btnSolo">⏱ Zamana Karşı (tek kişi)</button>
+    <button class="btn primary big" id="btnPlay">▶ Oyna</button>
     <button class="btn pi" id="btnLogin">π Pi ile Giriş Yap</button>
-    <div class="row"><button class="btn" id="btnStore">Mağaza</button><button class="btn" id="btnStats">İstatistik</button></div>
-    <button class="btn" id="btnLb">🏆 Liderlik Tablosu</button>
-    <button class="btn" id="btnRules">Kurallar</button>
+    <div class="icons">
+      <button id="btnStore"><span>🛒</span>Mağaza</button>
+      <button id="btnLb"><span>🏆</span>Sıralama</button>
+      <button id="btnStats"><span>📊</span>İstatistik</button>
+      <button id="btnRules"><span>📖</span>Kurallar</button>
+    </div>
     <div class="note" id="menuNote"></div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="modeBox">
+  <div class="card">
+    <h2>Mod seç</h2>
+    <button class="btn mode" id="btnAI">🤖 Bilgisayara Karşı</button>
+    <button class="btn mode" id="btnOnline">🌐 Arkadaşla (çevrimiçi)</button>
+    <button class="btn mode" id="btnPvp">👥 2 Oyuncu (aynı cihaz)</button>
+    <button class="btn mode" id="btnSolo">⏱ Zamana Karşı</button>
+    <div class="note" id="modeNote"></div>
+    <button class="btn" id="modeClose">Geri</button>
   </div>
 </div>
 
@@ -726,7 +744,7 @@ function hintText(){
   return 'Istakaya basılı tut, bırakınca vur';
 }
 function setPow(v){ S.power=v; $('hint').textContent=hintText(); }
-const overlays=['menu','store','rulesBox','over','levelBox','roomBox','spinBox','statsBox','lbBox'];
+const overlays=['menu','modeBox','store','rulesBox','over','levelBox','roomBox','spinBox','statsBox','lbBox'];
 function hideAll(){ overlays.forEach(o=>$(o).classList.add('hidden')); }
 function show(id){ hideAll(); $(id).classList.remove('hidden'); if(id==='menu')renderMenu(); if(id==='store')renderStore(); if(id==='statsBox')renderStats(); if(id==='lbBox')loadLeaderboard(); }
 
@@ -841,7 +859,9 @@ $('muteBtn').onclick=()=>{ S.mute=!S.mute; $('muteBtn').textContent=S.mute?'🔇
 $('btnResume').onclick=()=>{ hideAll(); if(S.mode==='online'&&room&&room.players.length<2)showRoomBox(); else if(S.phase==='over')showOver(); };
 $('btnAI').onclick=()=>show('levelBox');
 document.querySelectorAll('[data-level]').forEach(b=>b.onclick=()=>newGame('ai',0,b.dataset.level));
-$('levelClose').onclick=()=>show('menu');
+$('levelClose').onclick=()=>show('modeBox');
+$('btnPlay').onclick=()=>{ $('modeNote').textContent=''; show('modeBox'); };
+$('modeClose').onclick=()=>show('menu');
 $('btnPvp').onclick=()=>newGame('pvp',0);
 $('btnSolo').onclick=()=>newGame('solo',0);
 $('btnOnline').onclick=createRoom;
@@ -1098,7 +1118,7 @@ function showRoomBox(){
   show('roomBox');
 }
 async function createRoom(){
-  const note=$('menuNote'); note.textContent='Oda kuruluyor…';
+  const note=$('modeNote'); note.textContent='Oda kuruluyor…';
   try{
     await ensureSession();
     setupFresh(0,[session.username,'Rakip bekleniyor…']);
